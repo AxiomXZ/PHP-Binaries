@@ -22,6 +22,7 @@ OPENSSL_VERSION="3.6.0"
 LIBZIP_VERSION="1.11.4"
 SQLITE3_VERSION="3510100" #3.51.1
 LIBDEFLATE_VERSION="c8c56a20f8f621e6a966b716b31f1dedab6a41e3" #1.25 - see above note about "v" prefixes
+LIBFFI_VERSION="3.4.6"
 
 EXT_PMMPTHREAD_VERSION="6.3.0"
 EXT_YAML_VERSION="2.3.0"
@@ -1065,6 +1066,39 @@ function build_libdeflate {
 	write_done
 }
 
+function build_libffi {
+	if [ "$DO_STATIC" == "yes" ]; then
+		local EXTRA_FLAGS="--enable-static --disable-shared"
+	else
+		local EXTRA_FLAGS="--disable-static --enable-shared"
+	fi
+
+	write_library libffi "$LIBFFI_VERSION"
+	local libffi_dir="./libffi-$LIBFFI_VERSION"
+
+	if cant_use_cache "$libffi_dir"; then
+		rm -rf "$libffi_dir"
+		write_download
+		download_file "https://github.com/libffi/libffi/releases/download/v$LIBFFI_VERSION/libffi-$LIBFFI_VERSION.tar.gz" "libffi" | tar -zx >> "$DIR/install.log" 2>&1
+		write_configure
+		cd "$libffi_dir"
+		RANLIB=$RANLIB ./configure --prefix="$INSTALL_DIR" \
+		$EXTRA_FLAGS \
+		--disable-docs \
+		--with-pic \
+		$CONFIGURE_FLAGS >> "$DIR/install.log" 2>&1
+		write_compile
+		make -j $THREADS >> "$DIR/install.log" 2>&1 && mark_cache
+	else
+		write_caching
+		cd "$libffi_dir"
+	fi
+	write_install
+	make install >> "$DIR/install.log" 2>&1
+	cd ..
+	write_done
+}
+
 cd "$LIB_BUILD_DIR"
 
 build_zlib
@@ -1087,6 +1121,7 @@ build_libxml2
 build_libzip
 build_sqlite3
 build_libdeflate
+build_libffi
 
 # PECL libraries
 
@@ -1295,6 +1330,7 @@ $HAS_DEBUG \
 --enable-phar \
 --enable-ctype \
 --enable-sockets \
+--with-ffi \
 --enable-shared=no \
 --enable-static=yes \
 --enable-shmop \
