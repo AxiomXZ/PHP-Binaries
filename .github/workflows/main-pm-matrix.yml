@@ -64,6 +64,10 @@ jobs:
         working-directory: musl-cross-make
         run: |
           echo "TARGET = aarch64-linux-musl" > config.mak
+          #ftpmirror.gnu.org rate-limits bursts and regularly 502s when all PHP versions fetch at once,
+          #which aborts the whole build since make has no retry of its own
+          echo "GNU_SITE = https://mirrors.kernel.org/gnu" >> config.mak
+          echo "DL_CMD = wget -c --tries=5 --retry-connrefused --retry-on-http-error=502,503,504 -O" >> config.mak
           make -j$(nproc)
           make install
           mv ./output "${{ github.workspace }}/compiler"
