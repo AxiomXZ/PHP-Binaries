@@ -1111,8 +1111,18 @@ function build_libsrtp {
 		write_download
 		download_github_src "cisco/libsrtp" "v$LIBSRTP_VERSION" "libsrtp" | tar -zx >> "$DIR/install.log" 2>&1
 		cd "$libsrtp_dir"
+		mkdir -p build
+		cd build
 		write_configure
-		cmake . \
+		# libsrtp must always be shared (dlopened via FFI at runtime) even when the global
+		# cross-compile flags force -static;
+		SRTP_CFLAGS="${CFLAGS//-static/}"
+		SRTP_CXXFLAGS="${CXXFLAGS//-static/}"
+		SRTP_LDFLAGS="${LDFLAGS//-Wl,-static/}"
+		SRTP_LDFLAGS="${SRTP_LDFLAGS//-static-libgcc/}"
+		SRTP_LDFLAGS="${SRTP_LDFLAGS//-static/}"
+
+		CFLAGS="$SRTP_CFLAGS" CXXFLAGS="$SRTP_CXXFLAGS" LDFLAGS="$SRTP_LDFLAGS" cmake .. \
 			-DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
 			-DCMAKE_PREFIX_PATH="$INSTALL_DIR" \
 			-DCMAKE_INSTALL_LIBDIR=lib \
@@ -1122,14 +1132,16 @@ function build_libsrtp {
 			-DLIBSRTP_TEST_APPS=OFF \
 			-DENABLE_WARNINGS_AS_ERRORS=OFF >> "$DIR/install.log" 2>&1
 		write_compile
-		make -j $THREADS >> "$DIR/install.log" 2>&1 && mark_cache
+		CFLAGS="$SRTP_CFLAGS" CXXFLAGS="$SRTP_CXXFLAGS" LDFLAGS="$SRTP_LDFLAGS" make -j $THREADS >> "$DIR/install.log" 2>&1 && mark_cache
+		cd ..
 	else
 		write_caching
 		cd "$libsrtp_dir"
 	fi
 	write_install
+	cd build
 	make install >> "$DIR/install.log" 2>&1
-	cd ..
+	cd ../..
 	write_done
 }
 
@@ -1326,7 +1338,18 @@ if [ "$FSANITIZE_OPTIONS" != "" ]; then
 	LDFLAGS="-fsanitize=$FSANITIZE_OPTIONS $LDFLAGS"
 fi
 
-RANLIB=$RANLIB CFLAGS="$CFLAGS $FLAGS_LTO" CXXFLAGS="$CXXFLAGS $FLAGS_LTO" LDFLAGS="$LDFLAGS $FLAGS_LTO" ./configure $PHP_OPTIMIZATION --prefix="$INSTALL_DIR" \
+# Workaround for PHP <8.3: bcmath won't build on macOS with Xcode 26+ because clang
+# now defaults to C23, and PHP <8.3's bundled bcmath still uses old-style function
+# definitions that C23 rejects. Building it with -std=gnu17 fixes the issue. This is
+# applied on all platforms for simplicity, since it's a no-op on GCC-based toolchains
+# (Linux, Android) which don't default to C23.
+# See: https://github.com/php/php-src/issues/21816
+EXTRA_CSTD=""
+if [ "$PHP_VERSION_ID" -lt 80300 ]; then
+	EXTRA_CSTD="-std=gnu17"
+fi
+
+RANLIB=$RANLIB CFLAGS="$CFLAGS $FLAGS_LTO $EXTRA_CSTD" CXXFLAGS="$CXXFLAGS $FLAGS_LTO" LDFLAGS="$LDFLAGS $FLAGS_LTO" ./configure $PHP_OPTIMIZATION --prefix="$INSTALL_DIR" \
 --exec-prefix="$INSTALL_DIR" \
 --with-curl \
 --with-zlib \
