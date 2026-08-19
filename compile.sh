@@ -1100,6 +1100,53 @@ function build_libffi {
 	write_done
 }
 
+function build_openssl_shared_for_ffi {
+	#OpenSSL, but built shared, purely for NetherNet's WebRTC FFI to dlopen at runtime
+	write_library "openssl (shared, for FFI)" "$OPENSSL_VERSION"
+	local openssl_dir="./openssl-openssl-$OPENSSL_VERSION-shared"
+
+	if cant_use_cache "$openssl_dir"; then
+		rm -rf "$openssl_dir"
+		write_download
+		download_github_src "openssl/openssl" "openssl-$OPENSSL_VERSION" "openssl" | tar -zx >> "$DIR/install.log" 2>&1
+		mv "openssl-openssl-$OPENSSL_VERSION" "$openssl_dir"
+
+		write_configure
+		cd "$openssl_dir"
+
+		SSL_CFLAGS="${CFLAGS//-static/}"
+		SSL_CXXFLAGS="${CXXFLAGS//-static/}"
+		SSL_LDFLAGS="${LDFLAGS//-Wl,-static/}"
+		SSL_LDFLAGS="${SSL_LDFLAGS//-static-libgcc/}"
+		SSL_LDFLAGS="${SSL_LDFLAGS//-static/}"
+
+		local OPENSSL_CMD="./config"
+		if [ "$OPENSSL_TARGET" != "" ]; then
+			OPENSSL_CMD="./Configure $OPENSSL_TARGET"
+		fi
+
+		CFLAGS="$SSL_CFLAGS" CXXFLAGS="$SSL_CXXFLAGS" LDFLAGS="$SSL_LDFLAGS" RANLIB=$RANLIB $OPENSSL_CMD \
+			--prefix="$INSTALL_DIR" \
+			--openssldir="$INSTALL_DIR" \
+			--libdir="$INSTALL_DIR/lib-ffi" \
+			no-asm \
+			no-hw \
+			no-engine \
+			shared >> "$DIR/install.log" 2>&1
+
+		write_compile
+		CFLAGS="$SSL_CFLAGS" CXXFLAGS="$SSL_CXXFLAGS" LDFLAGS="$SSL_LDFLAGS" make -j $THREADS >> "$DIR/install.log" 2>&1 && mark_cache
+	else
+		write_caching
+		cd "$openssl_dir"
+	fi
+	write_install
+	mkdir -p "$INSTALL_DIR/lib-ffi"
+	make install_sw >> "$DIR/install.log" 2>&1
+	cd ..
+	write_done
+}
+
 #unlike everything else here, libsrtp is never linked into PHP - it's dlopened through FFI at runtime by the
 #NetherNet transport's WebRTC stack, so it has to be a shared library regardless of $DO_STATIC
 function build_libsrtp {
@@ -1169,6 +1216,9 @@ build_sqlite3
 build_libdeflate
 build_libffi
 build_libsrtp
+if [ "$DO_STATIC" == "yes" ]; then
+	build_openssl_shared_for_ffi
+fi
 
 # PECL libraries
 
