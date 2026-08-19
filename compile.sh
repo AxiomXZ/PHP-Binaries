@@ -394,7 +394,7 @@ if [ "$IS_CROSSCOMPILE" == "yes" ]; then
 		CONFIGURE_FLAGS="--host=$TOOLCHAIN_PREFIX"
 		CFLAGS="-static $CFLAGS"
 		CXXFLAGS="-static $CXXFLAGS"
-		LDFLAGS="-static -static-libgcc -Wl,-static"
+		LDFLAGS="-static-libgcc"
 		DO_STATIC="yes"
 		OPENSSL_TARGET="linux-aarch64"
 		export ac_cv_func_fnmatch_works=yes #musl should be OK
