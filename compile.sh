@@ -1460,9 +1460,6 @@ $HAVE_MYSQLI \
 $HAVE_VALGRIND \
 $CONFIGURE_FLAGS >> "$DIR/install.log" 2>&1
 write_compile
-if [ "$COMPILE_FOR_ANDROID" == "yes" ]; then
-	sed -i=".backup" 's/-export-dynamic/-all-static/g' Makefile
-fi
 sed -i=".backup" 's/PHP_BINARIES. pharcmd$/PHP_BINARIES)/g' Makefile
 sed -i=".backup" 's/install-programs install-pharcmd$/install-programs/g' Makefile
 
